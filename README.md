@@ -84,8 +84,8 @@ modeled on real-world practices from banking/payments platform environments
 
 ## Author
 
-Anuj Pratap Singh — Senior DevOps Engineer, 6+ years across cloud infrastructure,
+Anuj Pratap Singh — Senior DevOps Engineer, 5+ years across cloud infrastructure,
 container orchestration, and CI/CD automation for BFSI/payments, defense, and
 government platforms.
 
-[LinkedIn](#) · [Naukri](#)
+[LinkedIn](https://www.linkedin.com/in/anuj-singh-devops/)
