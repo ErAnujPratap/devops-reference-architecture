@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_TAG = "registry.internal/payments/transaction-service:${env.BUILD_NUMBER}"
+        HELM_CHART_PATH = "helm-charts/transaction-service"
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                sh 'docker build -t $IMAGE_TAG .'
+                sh 'docker push $IMAGE_TAG'
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                sh 'mvn test'
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('SAST - SonarQube') {
+            steps {
+                withSonarQubeEnv('sonarqube-server') {
+                    sh 'sonar-scanner -Dsonar.projectKey=transaction-service'
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                waitForQualityGate abortPipeline: true
+            }
+        }
+
+        stage('DAST Scan') {
+            steps {
+                sh 'zap-baseline.py -t $STAGING_URL -r dast-report.html'
+            }
+        }
+
+        stage('Helm Lint & Package') {
+            steps {
+                sh 'helm lint $HELM_CHART_PATH'
+                sh 'helm package $HELM_CHART_PATH'
+            }
+        }
+
+        stage('Deploy to SIT') {
+            when { branch 'main' }
+            steps {
+                input message: 'Approve deployment to SIT?'
+                sh 'argocd app sync transaction-service-sit'
+            }
+        }
+
+        stage('Canary Deploy to Production') {
+            when { branch 'main' }
+            steps {
+                input message: 'Approve canary rollout to production?'
+                sh './scripts/deploy-blue-green.sh --strategy canary --weight 10'
+                sh 'sleep 600'
+                sh './scripts/deploy-blue-green.sh --promote'
+            }
+        }
+    }
+
+    post {
+        failure {
+            sh './scripts/deploy-blue-green.sh --rollback'
+        }
+    }
+}

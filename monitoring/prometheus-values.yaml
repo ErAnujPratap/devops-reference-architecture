@@ -1,0 +1,57 @@
+# Prometheus Helm chart values — scoped for payments platform monitoring
+
+server:
+  retention: "15d"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+serverFiles:
+  alerting_rules.yml:
+    groups:
+      - name: transaction-service-alerts
+        rules:
+          - alert: HighErrorRate
+            expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.01
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Error rate above 1% for transaction-service"
+
+          - alert: HighLatency
+            expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "P99 latency above 500ms for transaction-service"
+
+          - alert: PodCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod crash looping detected"
+
+grafana:
+  dashboards:
+    default:
+      transaction-service:
+        gnetId: 15760
+        revision: 1
+        datasource: Prometheus
+
+alertmanager:
+  config:
+    route:
+      receiver: 'slack-notifications'
+      group_wait: 30s
+      repeat_interval: 1h
+    receivers:
+      - name: 'slack-notifications'
+        slack_configs:
+          - channel: '#payments-platform-alerts'
+            send_resolved: true

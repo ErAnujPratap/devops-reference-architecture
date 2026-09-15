@@ -1,0 +1,40 @@
+# Canary release: shifts a small % of live traffic to the new version
+# before promoting it to 100%. Weight is adjusted progressively by the
+# deploy-blue-green.sh script based on error-rate/latency health checks.
+
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: transaction-service
+  namespace: payments-prod
+spec:
+  hosts:
+    - transaction-service
+  http:
+    - route:
+        - destination:
+            host: transaction-service
+            subset: v1-stable
+          weight: 90
+        - destination:
+            host: transaction-service
+            subset: v2-canary
+          weight: 10
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: transaction-service
+  namespace: payments-prod
+spec:
+  host: transaction-service
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+  subsets:
+    - name: v1-stable
+      labels:
+        version: v1
+    - name: v2-canary
+      labels:
+        version: v2

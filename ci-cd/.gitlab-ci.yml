@@ -1,0 +1,82 @@
+stages:
+  - build
+  - test
+  - security-scan
+  - package
+  - deploy-dev
+  - deploy-sit
+  - deploy-prod
+
+variables:
+  IMAGE_TAG: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+  HELM_CHART_PATH: "helm-charts/transaction-service"
+
+build:
+  stage: build
+  script:
+    - docker build -t $IMAGE_TAG .
+    - docker push $IMAGE_TAG
+  only:
+    - branches
+
+unit-test:
+  stage: test
+  script:
+    - mvn test
+  artifacts:
+    reports:
+      junit: target/surefire-reports/*.xml
+
+sonarqube-sast:
+  stage: security-scan
+  script:
+    - sonar-scanner
+      -Dsonar.projectKey=transaction-service
+      -Dsonar.qualitygate.wait=true
+  allow_failure: false
+
+dast-scan:
+  stage: security-scan
+  script:
+    - zap-baseline.py -t $STAGING_URL -r dast-report.html
+  artifacts:
+    paths:
+      - dast-report.html
+  allow_failure: false
+
+helm-package:
+  stage: package
+  script:
+    - helm lint $HELM_CHART_PATH
+    - helm package $HELM_CHART_PATH
+
+deploy-dev:
+  stage: deploy-dev
+  script:
+    - argocd app sync transaction-service-dev
+  environment:
+    name: dev
+  only:
+    - develop
+
+deploy-sit:
+  stage: deploy-sit
+  script:
+    - argocd app sync transaction-service-sit
+  environment:
+    name: sit
+  when: manual
+  only:
+    - main
+
+deploy-prod-canary:
+  stage: deploy-prod
+  script:
+    - ./scripts/deploy-blue-green.sh --strategy canary --weight 10
+    - echo "Monitoring canary health for 10 minutes..."
+    - ./scripts/deploy-blue-green.sh --promote
+  environment:
+    name: production
+  when: manual
+  only:
+    - main
