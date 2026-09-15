@@ -7,7 +7,7 @@ spec:
   project: payments
 
   source:
-    repoURL: https://github.com/anuj-devops/devops-reference-architecture.git
+    repoURL: https://github.com/ErAnujPratap/devops-reference-architecture.git
     targetRevision: main
     path: helm-charts/transaction-service
 
